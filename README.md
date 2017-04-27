@@ -1,4 +1,2 @@
 # networkIBAP
-curso network analysis
-códigos e arquivos do curso
-execute na medida que foram trabalhados os exemplos
+Bem-vind@ ao curso de análise de rede do IBAP 2017
