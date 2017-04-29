@@ -1,0 +1,175 @@
+### Curso redes IBAP
+
+### Redes gaussianas (GGM) - métodos de estimação  
+#baseado em: http://psychosystems.org/network-model-selection-using-qgraph-1-3-10/
+#exemplo BFI (banco do pacote psych)
+library(RCurl)
+library(psych)
+bfi2<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/bfi.csv")
+bfi2<-read.csv(text = bfi2,sep=";")
+View(bfi2)
+#nomes e agrupamentos das variáveis
+bfi2_names<-list("Am indifferent to the feelings of others","Inquire about others' well-being","Know how to comfort others","Love children","Make people feel at ease","Am exacting in my work","Continue until everything is perfect","Do things according to a plan","Do things in a half-way manner","Waste my time","Don't talk a lot","Find it difficult to approach others","Know how to captivate people","Make friends easily","Take charge","Get angry easily","Get irritated easily","Have frequent mood swings","Often feel blue","Panic easily","Am full of ideas","Avoid difficult reading material","Carry the conversation to a higher level","Spend time reflecting on things","Will not probe deeply into a subject","Gender(1=M,2=F)","education","age(years)")
+bfi2_groups<-rep(c("A","C","E","N","O"),each=5)
+#gerando a matriz de correlações
+bfi2_cors<-cor_auto(bfi[1:25])
+#visualizando a matriz de correlações
+cor.plot(bfi2_cors)
+#qgraph e estimação GGM
+library(qgraph) 
+#cor graph
+bfi2_corG<-qgraph(bfi2_cors,layout="spring",groups=bfi2_groups,title="correlation")
+#pcor graph
+bfi2_pcorG<-qgraph(bfi2_cors,layout=bfi2_corG$layout,groups=bfi2_groups,graph="pcor",title="partial correlation")
+#holm graph
+bfi2_holmG<-qgraph(bfi2_cors,layout=bfi2_corG$layout,groups=bfi2_groups,graph="pcor",threshold="holm",sampleSize=nrow(bfi),title="holm graph")
+#optimal graph
+bfi2_optmG<-findGraph(bfi2_cors,nrow(bfi),type="pcor")
+bfi2_optimalG<-qgraph(bfi2_optmG,layout=bfi2_corG$layout,groups=bfi2_groups,labels=colnames(bfi2_cors),title="optimal graph")
+par(mfrow=c(2,2))
+plot(bfi2_corG)
+plot(bfi2_pcorG)
+plot(bfi2_holmG)
+plot(bfi2_optimalG)
+#lasso estimation
+par(mfrow=c(1,1))
+bfi2_glassoG<-qgraph(bfi2_cors,layout=bfi2_corG$layout,groups=bfi2_groups,graph="glasso",sampleSize=nrow(bfi),tuning=0.25,title="GeLasso")
+
+#QSG - há debate sobre a dimensionalidade (1 ou 2 fatores?)
+library(RCurl)
+qsgb<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/QSG.csv")
+qsgb<-read.csv(text = qsgb,sep=";")
+View(qsgb)
+qsgc<-cor_auto(qsgb)
+qsg_groups<-list("positivos"=c(1,3,4,7,8,12),"negativos"=c(2,5,6,9,10,11))
+qsg_names<-list("Tem podido concentrar-se no que faz","Suas preocupações o fazem perder o sono","Tem sentido que tem papel útil na vida","Tem sido capaz de tomar decisões","Tem notado que está agoniado","Tem sensação de não superar dificuldades","Tem sido capaz de desfrutar de atividades","Tem sido capaz de enfrentar problemas","Tem se sentido pouco feliz e deprimido","Tem perdido confiança em si mesmo","Tem pensado que não serve para nada","Sente-se razoavelmente feliz")
+qsg_G1<-qgraph(qsgc,layout="spring",groups=qsg_groups)
+qsg_G2<-qgraph(qsgc,layout="spring",groups=qsg_groups,graph="glasso",sampleSize=nrow(qsgb),tuning=0.25,nodeNames=qsg_names,legend.cex=0.2)
+
+### descritivos das redes
+### medidas de centralidade - betweenness, closeness e strength
+centralityPlot(list("cor"=bfi2_corG,"pcor"=bfi2_pcorG,"holm"=bfi2_holmG,"optimal"=bfi2_optimalG,"GeLasso"=bfi2_glassoG))
+qsg_cent<-centrality(qsg_G2,all.shortest.paths = T)
+str(qsg_cent)
+View(qsg_cent$ShortestPathLengths)
+View(qsg_cent$ShortestPaths)
+pathways(qsg_G2,from="QSG02",to=c("QSG04","QSG08"),fading=0.25)
+View(getWmat(qsg_G2))
+
+### rede de dados dicotômicos
+### modelo equivalente a TRI multidimensional de 2 parâmetros
+library(IsingFit)
+dass<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/dassmgroup.csv")
+dass<-read.csv(text = dass,sep=";")
+View(dass)
+dass_sub<-dass[2:22]
+View(dass_sub)
+namesdass<-list("1.wind","2.drymth","3.posfeel","4.breatdiff","5.init","6.ovreact","7.tremb","8.nervener","9.panfool","10.lookfor","11.gettagit","12.relax","13.blue","14.intol","15.panic","16.enthu","17.worth","18.rattouch","19.heartphys","20.scareas","21.meaning")
+dass_groups<-list("stress"=c(1,6,8,11,12,14,18),"anxiety"=c(2,4,7,9,15,19,20),"depression"=c(3,5,10,13,16,17,21))
+dass_cor<-cor_auto(dass_sub)
+dass_glasso<-qgraph(dass_cor,layout="spring",graph="glasso",sampleSize=nrow(dass_sub),labels=colnames(dass_sub),groups=dass_groups,nodeNames=namesdass,legend.cex=0.3,palette="pastel")
+dass_ising<-IsingFit(dass_sub,family = "binomial",AND=TRUE,gamma=0.25,plot = TRUE,progressbar = TRUE)
+dassIsing<-qgraph(dass_ising$weiadj,layout="spring",groups=dass_groups,nodeNames=namesdass,legend.cex=0.3,palette="pastel")
+centralityPlot(list("GeLasso"=dass_glasso,"Ising"=dassIsing))
+dass_ising$thresholds
+dass_thsld<-qgraph(dassIsing,vsize=(5+(dass_ising$thresholds))*2.3,labels=colnames(dass_sub))
+dass_cent<-centrality(dass_thsld,all.shortest.paths = T)
+View(dass_cent$ShortestPaths)
+View(dass_ising$weiadj)
+
+### mixed networks
+library(MASS)
+library(mgm)
+#preparando os dados
+smmix<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/mixednet.csv")
+smmix<-read.csv(text = smmix,sep=";")
+smmix<-na.omit(smmix)
+View(smmix)
+#modelo de regressão linear enter e stepwise
+fit_sm <- lm(smmix$SM~smmix$Id+smmix$Sex+smmix$Esc+smmix$Atv+smmix$Ric
+             +smmix$Rend+smmix$Tvol+smmix$Pre+smmix$SG+smmix$EP,data=smmix)
+summary(fit_sm)
+step <- stepAIC(fit_sm, direction="both")
+step$anova
+
+#preparando mixed network
+type<-c("g","c","c","c","c","g","c","c","g","g","g")
+level<-c(1,2,3,3,2,1,2,2,1,1,1)
+str(type)
+str(level)
+smfit<-mgmfit(smmix,type=type,lev=level,gam =0.25,rule.reg = "OR")
+#visualizando os resultados no qgraph
+library(qgraph)
+qgraph(smfit$wadj,layout="spring",fade=F,labels=colnames(smmix),edge.labels=T)
+#comparando com o GGM dos mesmos dados
+smmix_c<-cor_auto(smmix)
+qgraph(smmix_c,layout="spring",fade=F,labels=colnames(smmix),edge.labels=T,graph="glasso",sampleSize=nrow(smmix),tuning=0.25)
+
+#dados de autismo, fornecido como exemplo pelo pacote 
+data(autism_data)
+View(autism_data)
+fit_aut <- mgmfit(data = autism_data$data,type = autism_data$type,lev = autism_data$lev,lambda.sel = 'EBIC')
+colnames(fit_aut$wadj) <- autism_data$colnames
+autism_g<-qgraph(fitobj$wadj,legend=TRUE,nodeNames=autism_data$colnames,layout='spring',edge.color=fitobj$edgecolor)
+
+### análise de comunidades - identificando subgrupos em um grafo
+#análise de counidades do BFI
+# transformar em objeto igraph
+bfi2_glassoIG<-as.igraph(bfi2_glassoG)
+#walktrap community
+bfi_wtc<-walktrap.community(bfi2_glassoIG)
+bfi_wtc$membership
+#spinglass community
+bfi_sgc<-spinglass.community(bfi2_glassoIG)
+bfi_sgc$membership
+#louvain community - não aceita arestas negativas!
+#preparação - removendo as arestas negativas
+bfi2_glassoG2<-qgraph(abs(getWmat(bfi2_glassoG)),layout="spring")
+bfi2_glassoIG2<-as.igraph(bfi2_glassoG2)
+#método louvain
+bfi_lvc<-cluster_louvain(bfi2_glassoIG2)
+bfi_lvc$membership
+qgraph(bfi2_glassoG,groups=as.factor(bfi_lvc$membership),labels=colnames(bfi2))
+
+#análise de comunidades do QSG 
+plot(qsg_G2)
+qsg_IG2<-as.igraph(qsg_G2)
+qsg_wtc<-walktrap.community(qsg_IG2)  
+qsg_wtc$membership
+qsg_sgc<-spinglass.community(qsg_IG2)
+qsg_sgc$membership
+qsg_G2_2<-qgraph(abs(getWmat(qsg_G2)),layout="spring")
+qsg_IG2_2<-as.igraph(qsg_G2_2)
+qsg_lvc<-cluster_louvain(qsg_IG2_2)
+qsg_lvc$membership
+qgraph(qsg_G2,groups=as.factor(qsg_lvc$membership))
+
+#exemplo com a DASS-21
+plot(dass_glasso)
+dass_iglasso<-as.igraph(dass_glasso)
+dass_glasso_wtc<-walktrap.community(dass_iglasso)
+dass_glasso_wtc
+dass_glasso_sgc<-spinglass.community(dass_iglasso)
+dass_glasso_sgc
+
+plot(dassIsing)
+dassIsing_ig<-as.igraph(dassIsing)
+dass_ising_wtc<-walktrap.community(dassIsing_ig)
+dass_ising_wtc
+dass_ising_sgc<-spinglass.community(dassIsing_ig)
+dass_ising_sgc
+#método Ising recupera os agrupamentos teoricamente esperados
+#o método Louvain recupera a estrutura na aproximação não paramétrica do grafo gaussiano?
+dass_lv_g<-qgraph(abs(getWmat(dass_glasso)),layout="spring")
+dass_lv_ig<-as.igraph(dass_lv_g)
+walktrap.community(dass_lv_ig) #2 comunidades
+spinglass.community(dass_lv_ig) #4 comunidades
+cluster_louvain(dass_lv_ig) #3 comunidades modificado
+#bad news... 
+
+#comunidades preditores da satisfação com tratamento, no estudo do autismo
+library(igraph)
+autism_ig<-as.igraph(autism_g)
+aut_wtc<-walktrap.community(autism_ig) # os métodos louvain e spinglass recuperam os mesmos resultados
+qgraph(fitobj$wadj,legend=TRUE,nodeNames=autism_data$colnames,layout='spring',groups=as.factor(aut_wtc$membership),edge.color=fitobj$edgecolor,palette="pastel",legend.cex=0.3)
+# os métodos louvain e spinglass recuperam os mesmos resultados
