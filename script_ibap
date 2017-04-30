@@ -1,10 +1,19 @@
 ### Curso redes IBAP
-
+#carregar os pacotes
+library(RCurl)
+library(IsingFit)
+library(mgm)
+library(semPlot)
+library(lavaan)
+library(psych)
+library(lvnet)
+library(NetworkComparisonTest)
+library(igraph)
+library(bootnet)
+library(qgraph)
 ### Redes gaussianas (GGM) - métodos de estimação  
 #baseado em: http://psychosystems.org/network-model-selection-using-qgraph-1-3-10/
 #exemplo BFI (banco do pacote psych)
-library(RCurl)
-library(psych)
 bfi2<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/bfi.csv")
 bfi2<-read.csv(text = bfi2,sep=";")
 View(bfi2)
@@ -16,7 +25,6 @@ bfi2_cors<-cor_auto(bfi2[1:25])
 #visualizando a matriz de correlações
 cor.plot(bfi2_cors)
 #qgraph e estimação GGM
-library(qgraph) 
 #cor graph
 bfi2_corG<-qgraph(bfi2_cors,layout="spring",groups=bfi2_groups,title="correlation")
 #pcor graph
@@ -38,9 +46,7 @@ bfi2_glassoG<-qgraph(bfi2_cors,layout=bfi2_corG$layout,groups=bfi2_groups,graph=
 bfi2_cov<-cov(bfi2,use = "pairwise.complete.obs")
 bfi2_fit<-ggmFit(bfi2_glassoG,bfi2_cov,nrow(bfi2))
 bfi2_fit$fitMeasures
-
 #QSG - há debate sobre a dimensionalidade (1 ou 2 fatores?)
-library(RCurl)
 qsgb<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/QSG.csv")
 qsgb<-read.csv(text = qsgb,sep=";")
 View(qsgb)
@@ -51,8 +57,9 @@ qsg_G1<-qgraph(qsgc,layout="spring",groups=qsg_groups)
 qsg_G2<-qgraph(qsgc,layout="spring",groups=qsg_groups,graph="glasso",sampleSize=nrow(qsgb),tuning=0.25,nodeNames=qsg_names,legend.cex=0.2)
 
 ### descritivos das redes
-### medidas de centralidade - betweenness, closeness e strength
+#medidas de centralidade - betweenness, closeness e strength
 centralityPlot(list("cor"=bfi2_corG,"pcor"=bfi2_pcorG,"holm"=bfi2_holmG,"optimal"=bfi2_optimalG,"GeLasso"=bfi2_glassoG))
+#shotest paths e shortest paths lengths
 qsg_cent<-centrality(qsg_G2,all.shortest.paths = T)
 str(qsg_cent)
 View(qsg_cent$ShortestPathLengths)
@@ -61,7 +68,7 @@ pathways(qsg_G2,from="QSG02",to=c("QSG04","QSG08"),fading=0.25)
 View(getWmat(qsg_G2))
 
 ### rede de dados dicotômicos
-### modelo equivalente a TRI multidimensional de 2 parâmetros
+#modelo equivalente a TRI multidimensional de 2 parâmetros
 library(IsingFit)
 dass<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/dassmgroup.csv")
 dass<-read.csv(text = dass,sep=";")
@@ -103,12 +110,10 @@ str(type)
 str(level)
 smfit<-mgmfit(smmix,type=type,lev=level,gam =0.25,rule.reg = "OR")
 #visualizando os resultados no qgraph
-library(qgraph)
 qgraph(smfit$wadj,layout="spring",fade=F,labels=colnames(smmix),edge.labels=T)
 #comparando com o GGM dos mesmos dados
 smmix_c<-cor_auto(smmix)
 qgraph(smmix_c,layout="spring",fade=F,labels=colnames(smmix),edge.labels=T,graph="glasso",sampleSize=nrow(smmix),tuning=0.25)
-
 #dados de autismo, fornecido como exemplo pelo pacote 
 data(autism_data)
 View(autism_data)
@@ -116,7 +121,7 @@ fit_aut <- mgmfit(data = autism_data$data,type = autism_data$type,lev = autism_d
 colnames(fit_aut$wadj) <- autism_data$colnames
 autism_g<-qgraph(fit_aut$wadj,legend=TRUE,nodeNames=autism_data$colnames,layout='spring',edge.color=fitobj$edgecolor)
 
-### análise de comunidades - identificando subgrupos em um grafo
+### análise de comunidades - identificando subgrupos em uma rede
 #análise de counidades do BFI
 # transformar em objeto igraph
 bfi2_glassoIG<-as.igraph(bfi2_glassoG)
@@ -134,8 +139,6 @@ bfi2_glassoIG2<-as.igraph(bfi2_glassoG2)
 bfi_lvc<-cluster_louvain(bfi2_glassoIG2)
 bfi_lvc$membership
 qgraph(bfi2_glassoG,groups=as.factor(bfi_lvc$membership),labels=colnames(bfi2))
-
-
 #análise de comunidades do QSG 
 plot(qsg_G2)
 qsg_IG2<-as.igraph(qsg_G2)
@@ -148,7 +151,6 @@ qsg_IG2_2<-as.igraph(qsg_G2_2)
 qsg_lvc<-cluster_louvain(qsg_IG2_2)
 qsg_lvc$membership
 qgraph(qsg_G2,groups=as.factor(qsg_lvc$membership))
-
 #exemplo com a DASS-21
 plot(dass_glasso)
 dass_iglasso<-as.igraph(dass_glasso)
@@ -171,17 +173,14 @@ walktrap.community(dass_lv_ig) #2 comunidades
 spinglass.community(dass_lv_ig) #4 comunidades
 cluster_louvain(dass_lv_ig) #3 comunidades modificado
 #bad news... 
-
 # comunidades preditores da satisfação com tratamento, no estudo do autismo
-library(igraph)
 autism_ig<-as.igraph(autism_g)
 aut_wtc<-walktrap.community(autism_ig) # os métodos louvain e spinglass recuperam os mesmos resultados
 qgraph(fitobj$wadj,legend=TRUE,nodeNames=autism_data$colnames,layout='spring',groups=as.factor(aut_wtc$membership),edge.color=fitobj$edgecolor,palette="pastel",legend.cex=0.3)
 # os métodos louvain e spinglass recuperam os mesmos resultados
 
 ### Network comparison
-#permite comparar redes de acordo com 3 medidas: invariância da estrutura, invariãncia da força global e invariância de arestas
-library(NetworkComparisonTest)
+#permite comparar redes de acordo com 3 medidas: invariância estrutural, invariãncia da força global e invariância de arestas
 #preparação dos bancos
 dass_m<-dass[2:22][ which(dass$gender== 1),]
 View(dass_m)
@@ -218,14 +217,12 @@ pathways(dassIsing_f,from = "DASS3",to="DASS4",fading = 0.8)
 pathways(dassIsing_m,from = "DASS8",to="DASS4",fading = 0.8)
 pathways(dassIsing_f,from = "DASS8",to="DASS4",fading = 0.8)
 
-
 ### estabilidade das redes
 mhc<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/MHC-SF.csv")
 mhc<-read.csv(text = mhc,sep=";")
 View(mhc)
 mhc_c<-cor_auto(mhc)
 mhc_g<-qgraph(mhc_c,layout="spring",graph="glasso",sampleSize=nrow(mhc),tuning=0.25)
-library("bootnet")
 ?estimateNetwork
 Network <- estimateNetwork(mhc, default = "EBICglasso",tuning=0.25,corMethod="cor_auto",labels=colnames(mhc))
 plot(Network,layout="spring",labels=T)
@@ -245,7 +242,6 @@ mhc<-read.csv(text = mhc,sep=";")
 View(mhc)
 p<-ncol(mhc)
 dim(mhc)
-library(mgm)
 fit_mhc<-mgmfit(mhc,type = rep("g",p),lev=rep(1,p),rule.reg = "OR")
 pred_mhc<-predict(fit_mhc,mhc,error.continuous = "VarExpl")
 pred_mhc$error
@@ -253,8 +249,6 @@ mean(pred_mhc$error$Error)
 qgraph(fit_mhc$wadj,layout="spring",pie=pred_mhc$error$Error,labels=colnames(mhc))
 
 ### lv networks
-library(lvnet)
-library(psych)
 #BFI lvnetwork
 bfi_lvnet<-EBIClvglasso(bfi2_cors,nrow(bfi2),5,gamma = 0.25,nRho = 100)
 plot(bfi_lvnet,"network")
