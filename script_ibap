@@ -12,7 +12,7 @@ View(bfi2)
 bfi2_names<-list("Am indifferent to the feelings of others","Inquire about others' well-being","Know how to comfort others","Love children","Make people feel at ease","Am exacting in my work","Continue until everything is perfect","Do things according to a plan","Do things in a half-way manner","Waste my time","Don't talk a lot","Find it difficult to approach others","Know how to captivate people","Make friends easily","Take charge","Get angry easily","Get irritated easily","Have frequent mood swings","Often feel blue","Panic easily","Am full of ideas","Avoid difficult reading material","Carry the conversation to a higher level","Spend time reflecting on things","Will not probe deeply into a subject","Gender(1=M,2=F)","education","age(years)")
 bfi2_groups<-rep(c("A","C","E","N","O"),each=5)
 #gerando a matriz de correlações
-bfi2_cors<-cor_auto(bfi[1:25])
+bfi2_cors<-cor_auto(bfi2[1:25])
 #visualizando a matriz de correlações
 cor.plot(bfi2_cors)
 #qgraph e estimação GGM
@@ -34,6 +34,10 @@ plot(bfi2_optimalG)
 #lasso estimation
 par(mfrow=c(1,1))
 bfi2_glassoG<-qgraph(bfi2_cors,layout=bfi2_corG$layout,groups=bfi2_groups,graph="glasso",sampleSize=nrow(bfi),tuning=0.25,title="GeLasso")
+#índices de ajuste
+bfi2_cov<-cov(bfi2,use = "pairwise.complete.obs")
+bfi2_fit<-ggmFit(bfi2_glassoG,bfi2_cov,nrow(bfi2))
+bfi2_fit$fitMeasures
 
 #QSG - há debate sobre a dimensionalidade (1 ou 2 fatores?)
 library(RCurl)
@@ -110,7 +114,7 @@ data(autism_data)
 View(autism_data)
 fit_aut <- mgmfit(data = autism_data$data,type = autism_data$type,lev = autism_data$lev,lambda.sel = 'EBIC')
 colnames(fit_aut$wadj) <- autism_data$colnames
-autism_g<-qgraph(fitobj$wadj,legend=TRUE,nodeNames=autism_data$colnames,layout='spring',edge.color=fitobj$edgecolor)
+autism_g<-qgraph(fit_aut$wadj,legend=TRUE,nodeNames=autism_data$colnames,layout='spring',edge.color=fitobj$edgecolor)
 
 ### análise de comunidades - identificando subgrupos em um grafo
 #análise de counidades do BFI
@@ -130,6 +134,7 @@ bfi2_glassoIG2<-as.igraph(bfi2_glassoG2)
 bfi_lvc<-cluster_louvain(bfi2_glassoIG2)
 bfi_lvc$membership
 qgraph(bfi2_glassoG,groups=as.factor(bfi_lvc$membership),labels=colnames(bfi2))
+
 
 #análise de comunidades do QSG 
 plot(qsg_G2)
@@ -167,9 +172,109 @@ spinglass.community(dass_lv_ig) #4 comunidades
 cluster_louvain(dass_lv_ig) #3 comunidades modificado
 #bad news... 
 
-#comunidades preditores da satisfação com tratamento, no estudo do autismo
+# comunidades preditores da satisfação com tratamento, no estudo do autismo
 library(igraph)
 autism_ig<-as.igraph(autism_g)
 aut_wtc<-walktrap.community(autism_ig) # os métodos louvain e spinglass recuperam os mesmos resultados
 qgraph(fitobj$wadj,legend=TRUE,nodeNames=autism_data$colnames,layout='spring',groups=as.factor(aut_wtc$membership),edge.color=fitobj$edgecolor,palette="pastel",legend.cex=0.3)
 # os métodos louvain e spinglass recuperam os mesmos resultados
+
+### Network comparison
+#permite comparar redes de acordo com 3 medidas: invariância da estrutura, invariãncia da força global e invariância de arestas
+library(NetworkComparisonTest)
+#preparação dos bancos
+dass_m<-dass[2:22][ which(dass$gender== 1),]
+View(dass_m)
+dass_f<-dass[2:22][ which(dass$gender== 2),]
+View(dass_f)
+# Network comparison test
+dass_nct<-NCT(dass_f, dass_m, gamma=0.25, it=10, binary.data=TRUE, paired=FALSE, 
+              weighted=TRUE, AND=TRUE, test.edges=TRUE, edges="all", 
+              progressbar=TRUE)
+#invariância estrutural
+dass_nct$nwinv.real 
+dass_nct$nwinv.perm 
+dass_nct$nwinv.pval 
+#força global
+dass_nct$glstrinv.sep 
+dass_nct$glstrinv.real 
+dass_nct$glstrinv.perm
+dass_nct$glstrinv.pval 
+#arestas 
+dass_nct$einv.real
+dass_nct$einv.pvals
+#plotando ambos os grafos
+par(mfrow=c(1,2))
+#masculino
+dassm_ising<-IsingFit(dass_m,family = "binomial",AND=TRUE,gamma=0.25,plot = TRUE,progressbar = TRUE)
+dassIsing_m<-qgraph(dassm_ising$weiadj,layout=dassIsing$layout,groups=dass_groups,nodeNames=namesdass,legend.cex=0.3,palette="pastel",legend=F,title="Masc")
+#feminino
+dassf_ising<-IsingFit(dass_f,family = "binomial",AND=TRUE,gamma=0.25,plot = TRUE,progressbar = TRUE)
+dassIsing_f<-qgraph(dassf_ising$weiadj,layout=dassIsing$layout,groups=dass_groups,nodeNames=namesdass,legend.cex=0.3,palette="pastel",legend=F,title="Fem")
+# edges 3 e 4 
+pathways(dassIsing_m,from = "DASS3",to="DASS4",fading = 0.8)
+pathways(dassIsing_f,from = "DASS3",to="DASS4",fading = 0.8)
+#edges 4 e 8
+pathways(dassIsing_m,from = "DASS8",to="DASS4",fading = 0.8)
+pathways(dassIsing_f,from = "DASS8",to="DASS4",fading = 0.8)
+
+
+### estabilidade das redes
+mhc<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/MHC-SF.csv")
+mhc<-read.csv(text = mhc,sep=";")
+View(mhc)
+mhc_c<-cor_auto(mhc)
+mhc_g<-qgraph(mhc_c,layout="spring",graph="glasso",sampleSize=nrow(mhc),tuning=0.25)
+library("bootnet")
+?estimateNetwork
+Network <- estimateNetwork(mhc, default = "EBICglasso",tuning=0.25,corMethod="cor_auto",labels=colnames(mhc))
+plot(Network,layout="spring",labels=T)
+boot1<-bootnet(Network,nBoots=20,nCores = 8)
+plot(boot1, labels = FALSE, order = "sample")
+boot2 <- bootnet(Network, nBoots = 20, type = "case", nCores = 8)
+plot(boot2)
+corStability(boot2)
+differenceTest(boot1, 3, 14, "strength")
+plot(boot1, "edge", plot = "difference", onlyNonZero = TRUE,order = "sample")
+plot(boot1, "betweenness")
+plot(boot1)
+
+### predição
+mhc<-getURL("https://raw.githubusercontent.com/wagnerLM/networkIBAP/master/MHC-SF.csv")
+mhc<-read.csv(text = mhc,sep=";")
+View(mhc)
+p<-ncol(mhc)
+dim(mhc)
+library(mgm)
+fit_mhc<-mgmfit(mhc,type = rep("g",p),lev=rep(1,p),rule.reg = "OR")
+pred_mhc<-predict(fit_mhc,mhc,error.continuous = "VarExpl")
+pred_mhc$error
+mean(pred_mhc$error$Error)
+qgraph(fit_mhc$wadj,layout="spring",pie=pred_mhc$error$Error,labels=colnames(mhc))
+
+### lv networks
+library(lvnet)
+library(psych)
+#BFI lvnetwork
+bfi_lvnet<-EBIClvglasso(bfi2_cors,nrow(bfi2),5,gamma = 0.25,nRho = 100)
+plot(bfi_lvnet,"network")
+bfi_lvg<-qgraph(bfi_lvnet$pcor,layout="spring")
+bfi_fit<-ggmFit(bfi_lvg,bfi_lvnet$w,nrow(bfi2),ebicTuning = 0.25,refit = F)
+bfi_fit
+#lvneet QSG
+#lv net com 1 fator
+qsg_lv1<-EBIClvglasso(qsgc,nrow(qsgb),1,gamma = 0.25,nRho = 100)
+plot(qsg_lv1,"network")
+qsg_lvg1<-qgraph(qsg_lv1$pcor,layout="spring")
+#lv net com 2 fatores
+qsg_lv2<-EBIClvglasso(qsgc,nrow(qsgb),2,gamma = 0.25,nRho = 100)
+plot(qsg_lv2,"network")
+qsg_lvg2<-qgraph(qsg_lv2$pcor,layout="spring")
+#matriz de covariância
+qsg_cov<-cov(qsgb,use = "pairwise.complete.obs")
+View(qsg_cov)
+#estimando o ajuste dos modelos
+qsg_fit1<-ggmFit(qsg_lvg1,qsg_lv1$w,nrow(qsgb),ebicTuning = 0.25,refit = F)
+qsg_fit1$fitMeasures$ebic
+qsg_fit2<-ggmFit(qsg_lvg2,qsg_lv2$w,nrow(qsgb),ebicTuning = 0.25,refit = F)
+qsg_fit2$fitMeasures$ebic
