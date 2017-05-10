@@ -1,5 +1,19 @@
 ### Curso redes IBAP
-#carregar os pacotes
+#instalando os pacotes
+install.packages("RCurl") #repetir para todos os pacotes ou 
+#exemplo via https://gist.github.com/stevenworthington/3178163 
+ipak <- function(pkg){
+   new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+    if (length(new.pkg)) 
+        install.packages(new.pkg, dependencies = TRUE)
+    sapply(pkg, require, character.only = TRUE)
+}
+
+# usage
+packages <- c("ggplot2", "plyr", "reshape2", "RColorBrewer", "scales", "grid")
+ipak(packages)
+
+#carregando os pacotes
 library(RCurl)
 library(IsingFit)
 library(mgm)
